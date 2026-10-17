@@ -1,14 +1,9 @@
 package today.tutul.nettools.net
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.IOException
 import java.net.Inet4Address
 import java.net.Inet6Address
 import java.net.InetAddress
@@ -45,24 +40,5 @@ object Ping {
         target !is Inet6Address -> listOf(PING)
         File(PING6).exists() -> listOf(PING6)
         else -> listOf(PING, "-6")
-    }
-
-    /** Runs a command and streams its output lines; cancelling the collector kills the process. */
-    private fun execLines(args: List<String>): Flow<String> = channelFlow {
-        val process = ProcessBuilder(args).redirectErrorStream(true).start()
-        // Destroying the process closes its stdout, which unblocks the read below.
-        val killer = launch { try { awaitCancellation() } finally { process.destroy() } }
-        try {
-            withContext(Dispatchers.IO) {
-                process.inputStream.bufferedReader().useLines { lines ->
-                    for (line in lines) send(line)
-                }
-                process.waitFor()
-            }
-        } catch (e: IOException) {
-            if (isActive) throw e
-        } finally {
-            killer.cancel()
-        }
     }
 }

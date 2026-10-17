@@ -34,6 +34,10 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        // Extract native libs on install so libiperf3.so is a real, executable file.
+        jniLibs.useLegacyPackaging = true
+    }
     ndkVersion = "30.0.16248370"
     externalNativeBuild {
         cmake {

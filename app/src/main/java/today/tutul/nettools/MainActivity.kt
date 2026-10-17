@@ -19,6 +19,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import today.tutul.nettools.ui.IpScreen
+import today.tutul.nettools.ui.IperfScreen
 import today.tutul.nettools.ui.PingScreen
 import today.tutul.nettools.ui.TracerouteScreen
 import today.tutul.nettools.ui.theme.NetToolsTheme
@@ -35,7 +36,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val TABS = listOf("IP", "Ping", "Traceroute")
+private val TABS = listOf("IP", "Ping", "Traceroute", "iperf3")
 
 @Composable
 fun NetToolsApp() {
@@ -54,7 +55,8 @@ fun NetToolsApp() {
             when (tab) {
                 0 -> IpScreen()
                 1 -> PingScreen()
-                else -> TracerouteScreen()
+                2 -> TracerouteScreen()
+                else -> IperfScreen()
             }
         }
     }

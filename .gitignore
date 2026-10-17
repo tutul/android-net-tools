@@ -15,3 +15,5 @@
 local.properties
 
 .kotlin
+/third_party/iperf3-dl
+/third_party/iperf3-build
