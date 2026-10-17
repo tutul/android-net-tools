@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,11 +36,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import today.tutul.nettools.net.Hop
 import today.tutul.nettools.net.Ping
-import java.net.Inet4Address
+import today.tutul.nettools.net.Traceroute
 import java.net.InetAddress
 
 class TracerouteViewModel : ViewModel() {
     var host by mutableStateOf("1.1.1.1")
+    var ipv6 by mutableStateOf(false)
     var resolveNames by mutableStateOf(false)
     var running by mutableStateOf(false)
         private set
@@ -56,13 +56,19 @@ class TracerouteViewModel : ViewModel() {
         running = true
         job = viewModelScope.launch {
             try {
-                val target = Ping.resolve(host, ipv6 = false) as Inet4Address
+                val target = Ping.resolve(host, ipv6)
                 status = "${host.trim()} → ${target.hostAddress}"
-                Ping.traceroute(target, MAX_HOPS).collect { hop ->
+                Traceroute.run(target, MAX_HOPS).collect { hop ->
                     hops += hop
-                    if (resolveNames && hop.ip != null) lookupName(hops.lastIndex, hop.ip)
+                    val ip = hop.ips.firstOrNull()
+                    if (resolveNames && ip != null) lookupName(hops.lastIndex, ip)
                 }
-                status += if (hops.lastOrNull()?.reached == true) "  · reached" else "  · not reached in $MAX_HOPS hops"
+                val last = hops.lastOrNull()
+                status += when {
+                    last?.reached == true -> "  · reached"
+                    last?.note != null -> "  · ${last.note}"
+                    else -> "  · not reached in $MAX_HOPS hops"
+                }
             } catch (e: CancellationException) {
                 status += "  · stopped"
                 throw e
@@ -80,7 +86,7 @@ class TracerouteViewModel : ViewModel() {
             val name = withContext(Dispatchers.IO) {
                 runCatching { InetAddress.getByName(ip).canonicalHostName }.getOrNull()
             }
-            if (name != null && name != ip && index < hops.size && hops[index].ip == ip) {
+            if (name != null && name != ip && index < hops.size && hops[index].ips.firstOrNull() == ip) {
                 hops[index] = hops[index].copy(hostname = name)
             }
         }
@@ -100,33 +106,43 @@ fun TracerouteScreen(vm: TracerouteViewModel = viewModel()) {
     val keyboard = LocalSoftwareKeyboardController.current
 
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedTextField(
-            value = vm.host,
-            onValueChange = { vm.host = it },
-            label = { Text("Host or IPv4") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
-            keyboardActions = KeyboardActions(onGo = { keyboard?.hide(); vm.start() }),
-            modifier = Modifier.fillMaxWidth(),
-        )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Resolve names")
-            Switch(checked = vm.resolveNames, onCheckedChange = { vm.resolveNames = it })
+            OutlinedTextField(
+                value = vm.host,
+                onValueChange = { vm.host = it },
+                label = { Text("Host or IP") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
+                keyboardActions = KeyboardActions(onGo = { keyboard?.hide(); vm.start() }),
+                modifier = Modifier.weight(1f),
+            )
             if (vm.running) {
                 Button(onClick = vm::stop) { Text("Stop") }
             } else {
                 Button(onClick = { keyboard?.hide(); vm.start() }) { Text("Start") }
             }
         }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("IPv6")
+            Switch(checked = vm.ipv6, onCheckedChange = { vm.ipv6 = it })
+            Text("Reverse DNS")
+            Switch(checked = vm.resolveNames, onCheckedChange = { vm.resolveNames = it })
+        }
         Text(vm.status, style = MaterialTheme.typography.bodySmall)
         SelectionContainer {
             LazyColumn(Modifier.fillMaxSize()) {
                 items(vm.hops) { hop ->
-                    val rtt = hop.rttMs?.let { "%.1f ms".format(it) } ?: ""
+                    val rtts = hop.rttsMs.joinToString("  ") { rtt -> rtt?.let { "%.1f".format(it) } ?: "*" }
                     Column(Modifier.padding(vertical = 2.dp)) {
-                        Mono("%2d  %-15s  %s".format(hop.ttl, hop.ip ?: "*", rtt))
+                        Mono("%2d  %s".format(hop.ttl, hop.ips.firstOrNull() ?: "*"))
+                        hop.ips.drop(1).forEach { Mono("    $it") }
+                        Mono("    $rtts ms")
                         hop.hostname?.let {
                             Text("    $it", style = MaterialTheme.typography.bodySmall)
+                        }
+                        hop.note?.let {
+                            Text("    $it", color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
