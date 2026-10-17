@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -42,6 +43,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import today.tutul.nettools.net.Iperf
 import today.tutul.nettools.net.IperfEvent
@@ -52,20 +54,29 @@ class IperfViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("iperf", Context.MODE_PRIVATE)
     private val iperf = Iperf(app)
 
-    // The last server used is remembered across app restarts.
+    // The last settings used are remembered across app restarts.
     var host by mutableStateOf(prefs.getString("host", "") ?: "")
     var ports by mutableStateOf(prefs.getString("ports", "5201") ?: "5201")
-    var reverse by mutableStateOf(false)
-    var udp by mutableStateOf(false)
-    var seconds by mutableStateOf("10")
-    var parallel by mutableStateOf("1")
-    var udpMbps by mutableStateOf("10")
+    var reverse by mutableStateOf(prefs.getBoolean("reverse", false))
+    var udp by mutableStateOf(prefs.getBoolean("udp", false))
+    var seconds by mutableStateOf(prefs.getString("seconds", "10") ?: "10")
+    /** Data cap in MB (1 MB = 1,000,000 bytes); blank or 0 = no limit. */
+    var maxMb by mutableStateOf(prefs.getString("maxMb", "100") ?: "100")
+    var parallel by mutableStateOf(prefs.getString("parallel", "1") ?: "1")
+    var udpMbps by mutableStateOf(prefs.getString("udpMbps", "10") ?: "10")
 
     var running by mutableStateOf(false)
         private set
     var status by mutableStateOf("")
         private set
+    var stopping by mutableStateOf(false)
+        private set
     var summary by mutableStateOf<IperfEvent.Summary?>(null)
+        private set
+    /** Why the test ended early, if it did; the summary is then partial. */
+    var stoppedReason by mutableStateOf<String?>(null)
+        private set
+    var transferred by mutableStateOf(0L)
         private set
     val intervals = mutableStateListOf<IperfEvent.Interval>()
     val messages = mutableStateListOf<String>()
@@ -79,19 +90,31 @@ class IperfViewModel(app: Application) : AndroidViewModel(app) {
             status = "Enter a host and a port (e.g. 5201 or 5200-5209)"
             return
         }
-        prefs.edit { putString("host", target); putString("ports", ports.trim()) }
+        prefs.edit {
+            putString("host", target)
+            putString("ports", ports.trim())
+            putBoolean("reverse", reverse)
+            putBoolean("udp", udp)
+            putString("seconds", seconds)
+            putString("maxMb", maxMb)
+            putString("parallel", parallel)
+            putString("udpMbps", udpMbps)
+        }
         val options = IperfOptions(
             host = target,
             ports = portRange,
             reverse = reverse,
             udp = udp,
             seconds = seconds.toIntOrNull()?.coerceIn(1, 300) ?: 10,
+            maxBytes = maxMb.toLongOrNull()?.takeIf { it > 0 }?.times(1_000_000),
             parallel = parallel.toIntOrNull()?.coerceIn(1, 16) ?: 1,
             udpMbps = udpMbps.toIntOrNull()?.coerceIn(1, 10_000) ?: 10,
         )
         intervals.clear()
         messages.clear()
         summary = null
+        stoppedReason = null
+        transferred = 0
         running = true
         job = viewModelScope.launch {
             try {
@@ -99,7 +122,12 @@ class IperfViewModel(app: Application) : AndroidViewModel(app) {
                     when (event) {
                         is IperfEvent.Connecting -> status = "Connecting to $target:${event.port}…"
                         is IperfEvent.Connected -> status = "${event.local} → ${event.remote}"
-                        is IperfEvent.Interval -> intervals += event
+                        is IperfEvent.Stopped -> stoppedReason = event.reason
+                        is IperfEvent.Interval -> {
+                            // A stop leaves a final sliver of a few ms whose rate is noise.
+                            if (event.end - event.start >= 0.1) intervals += event
+                            transferred += event.bytes
+                        }
                         is IperfEvent.Summary -> summary = event
                         is IperfEvent.Error -> messages += "Error: ${event.message}"
                         is IperfEvent.Log -> if (event.line.isNotBlank()) messages += event.line
@@ -112,12 +140,21 @@ class IperfViewModel(app: Application) : AndroidViewModel(app) {
                 messages += "Error: ${e.message}"
             } finally {
                 running = false
+                stopping = false
             }
         }
     }
 
+    /** Lets iperf3 wrap up and report what it measured; force-kills it if it hangs. */
     fun stop() {
-        job?.cancel()
+        if (!running || stopping) return
+        stopping = true
+        iperf.stop("stopped by user")
+        val current = job
+        viewModelScope.launch {
+            delay(5_000)
+            current?.cancel()
+        }
     }
 
     private fun parsePorts(text: String): IntRange? {
@@ -162,26 +199,36 @@ fun IperfScreen(vm: IperfViewModel = viewModel()) {
             }
         }
         item {
-            Box {
-                TextButton(onClick = { presetsOpen = true }) { Text("Public servers ▾") }
-                DropdownMenu(expanded = presetsOpen, onDismissRequest = { presetsOpen = false }) {
-                    PUBLIC_IPERF_SERVERS.forEach { server ->
-                        val portText = if (server.ports.first == server.ports.last) "${server.ports.first}"
-                            else "${server.ports.first}-${server.ports.last}"
-                        DropdownMenuItem(
-                            text = {
-                                Column {
-                                    Text(server.name)
-                                    Text("${server.host}:$portText", style = MaterialTheme.typography.bodySmall)
-                                }
-                            },
-                            onClick = {
-                                vm.host = server.host
-                                vm.ports = portText
-                                presetsOpen = false
-                            },
-                        )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box {
+                    TextButton(onClick = { presetsOpen = true }) { Text("Public servers ▾") }
+                    DropdownMenu(expanded = presetsOpen, onDismissRequest = { presetsOpen = false }) {
+                        PUBLIC_IPERF_SERVERS.forEach { server ->
+                            val portText = if (server.ports.first == server.ports.last) "${server.ports.first}"
+                                else "${server.ports.first}-${server.ports.last}"
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(server.name)
+                                        Text("${server.host}:$portText", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                },
+                                onClick = {
+                                    vm.host = server.host
+                                    vm.ports = portText
+                                    presetsOpen = false
+                                },
+                            )
+                        }
                     }
+                }
+                Spacer(Modifier.weight(1f))
+                if (vm.running) {
+                    Button(onClick = vm::stop, enabled = !vm.stopping) {
+                        Text(if (vm.stopping) "Stopping…" else "Stop")
+                    }
+                } else {
+                    Button(onClick = { keyboard?.hide(); vm.start() }) { Text("Start") }
                 }
             }
         }
@@ -196,26 +243,27 @@ fun IperfScreen(vm: IperfViewModel = viewModel()) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 NumberField("Seconds", vm.seconds) { vm.seconds = it }
+                NumberField("Max MB", vm.maxMb) { vm.maxMb = it }
                 if (vm.udp) {
                     NumberField("Mbit/s", vm.udpMbps) { vm.udpMbps = it }
                 } else {
                     NumberField("Streams", vm.parallel) { vm.parallel = it }
                 }
-                if (vm.running) {
-                    Button(onClick = vm::stop) { Text("Stop") }
-                } else {
-                    Button(onClick = { keyboard?.hide(); vm.start() }) { Text("Start") }
-                }
             }
+            Text(
+                "Stops at whichever comes first. Max MB blank or 0 = no limit.",
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
         item {
             Text(vm.status, style = MaterialTheme.typography.bodySmall)
             vm.intervals.lastOrNull()?.takeIf { vm.running }?.let {
                 Text(formatBps(it.bitsPerSecond), style = MaterialTheme.typography.headlineMedium)
+                Text("transferred ${formatBytes(vm.transferred)}", style = MaterialTheme.typography.bodySmall)
             }
         }
         vm.summary?.let { s ->
-            item { SummaryCard(s, reverse = vm.reverse) }
+            item { SummaryCard(s, reverse = vm.reverse, stoppedReason = vm.stoppedReason) }
         }
         items(vm.messages) { line ->
             Text(line, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -232,14 +280,23 @@ fun IperfScreen(vm: IperfViewModel = viewModel()) {
 }
 
 @Composable
-private fun SummaryCard(s: IperfEvent.Summary, reverse: Boolean) {
+private fun SummaryCard(s: IperfEvent.Summary, reverse: Boolean, stoppedReason: String?) {
     Card(Modifier.fillMaxWidth()) {
         SelectionContainer {
             Column(Modifier.padding(12.dp)) {
                 Text(if (reverse) "Download result" else "Upload result", fontWeight = FontWeight.Bold)
-                Text(formatBps(s.receivedBps), style = MaterialTheme.typography.headlineMedium)
-                Mono("sender    ${formatBps(s.sentBps)}")
-                Mono("receiver  ${formatBps(s.receivedBps)}")
+                if (stoppedReason == null) {
+                    Text(formatBps(s.receivedBps), style = MaterialTheme.typography.headlineMedium)
+                    Mono("sender    ${formatBps(s.sentBps)}  ${formatBytes(s.sentBytes)}")
+                    Mono("receiver  ${formatBps(s.receivedBps)}  ${formatBytes(s.receivedBytes)}")
+                } else {
+                    // Stopped early: iperf3 only reports this side, the server's numbers never arrive.
+                    val bps = if (reverse) s.receivedBps else s.sentBps
+                    val bytes = if (reverse) s.receivedBytes else s.sentBytes
+                    Text(formatBps(bps), style = MaterialTheme.typography.headlineMedium)
+                    Mono("${if (reverse) "received" else "sent"}  ${formatBytes(bytes)}")
+                    Text("Partial result: $stoppedReason", style = MaterialTheme.typography.bodySmall)
+                }
                 s.retransmits?.let { Mono("retransmits $it") }
                 if (s.lostPercent != null) {
                     Mono("jitter %.2f ms   loss %.2f%%".format(s.jitterMs ?: 0.0, s.lostPercent))
@@ -259,6 +316,11 @@ private fun NumberField(label: String, value: String, onChange: (String) -> Unit
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.width(100.dp),
     )
+}
+
+private fun formatBytes(bytes: Long): String = when {
+    bytes >= 1_000_000_000 -> "%.2f GB".format(bytes / 1e9)
+    else -> "%.1f MB".format(bytes / 1e6)
 }
 
 private fun formatBps(bps: Double): String = when {
