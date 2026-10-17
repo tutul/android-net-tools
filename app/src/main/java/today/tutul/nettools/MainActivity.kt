@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -18,9 +18,11 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import today.tutul.nettools.ui.IpScreen
 import today.tutul.nettools.ui.IperfScreen
 import today.tutul.nettools.ui.PingScreen
+import today.tutul.nettools.ui.SshScreen
 import today.tutul.nettools.ui.TracerouteScreen
 import today.tutul.nettools.ui.theme.NetToolsTheme
 
@@ -36,7 +38,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private val TABS = listOf("IP", "Ping", "Traceroute", "iperf3")
+private val TABS = listOf("IP", "Ping", "Traceroute", "iperf3", "SSH")
 
 @Composable
 fun NetToolsApp() {
@@ -44,7 +46,11 @@ fun NetToolsApp() {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
-            PrimaryTabRow(selectedTabIndex = tab, modifier = Modifier.statusBarsPadding()) {
+            PrimaryScrollableTabRow(
+                selectedTabIndex = tab,
+                modifier = Modifier.statusBarsPadding(),
+                edgePadding = 0.dp,
+            ) {
                 TABS.forEachIndexed { i, title ->
                     Tab(selected = tab == i, onClick = { tab = i }, text = { Text(title) })
                 }
@@ -56,7 +62,8 @@ fun NetToolsApp() {
                 0 -> IpScreen()
                 1 -> PingScreen()
                 2 -> TracerouteScreen()
-                else -> IperfScreen()
+                3 -> IperfScreen()
+                else -> SshScreen()
             }
         }
     }
