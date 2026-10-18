@@ -17,3 +17,8 @@ local.properties
 .kotlin
 /third_party/iperf3-dl
 /third_party/iperf3-build
+
+# Release signing key and its passwords: back these up, never commit them.
+keystore.properties
+*.jks
+*.keystore

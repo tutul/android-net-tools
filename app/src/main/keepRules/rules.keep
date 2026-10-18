@@ -1,12 +1,15 @@
-# Add project specific R8 rules here.
-# AGP will combine all keep rule files in src/main/keepRules to pass to R8
-#
-# For more details, see
-#   https://d.android.com/r/tools/r8/keep-rules
+# R8 keep rules. AGP combines every file in src/main/keepRules.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# JSch picks its crypto implementations by class name at runtime
+# (see SshCrypto.install), so R8 can't see they're used.
+-keep class com.jcraft.jsch.** { *; }
+-dontwarn com.jcraft.jsch.**
+
+# Bouncy Castle classes are reached from those JSch modules.
+-keep class org.bouncycastle.** { *; }
+-dontwarn org.bouncycastle.**
+
+# JNI looks up native methods by class and method name (traceroute.c).
+-keepclasseswithmembernames class * {
+    native <methods>;
+}

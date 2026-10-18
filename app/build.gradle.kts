@@ -1,6 +1,13 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+// Release signing key, kept out of git. See RELEASE.md for how to create it.
+val keystoreProperties = rootProject.file("keystore.properties").takeIf { it.exists() }?.let { file ->
+    Properties().apply { file.inputStream().use { load(it) } }
 }
 
 android {
@@ -19,11 +26,31 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (keystoreProperties != null) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            // Separate app ID so a debug install never replaces (or wipes) the release app.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
+            // Without keystore.properties the release APK is built unsigned.
+            signingConfig = signingConfigs.findByName("release")
+            // Whole-app R8. The template's packageScope (androidx/kotlin only) produced
+            // an APK that crashed at startup: R8 moved one of Kotlin's package-private
+            // CollectionsKt parts out of its package (IllegalAccessError).
             optimization {
                 enable = true
-                packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
             }
         }
     }
