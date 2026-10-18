@@ -31,11 +31,13 @@ mkdir -p ~/app_keys && chmod 700 ~/app_keys
 在專案根目錄（就是 `RELEASE.md` 所在的資料夾）建立 `keystore.properties`，內容如下，密碼換成你自己的：
 
 ```properties
-storeFile=/Users/tutu/app_keys/nettools-release.jks
+storeFile=/Users/你的使用者名稱/app_keys/nettools-release.jks
 storePassword=你的密碼
 keyAlias=nettools
 keyPassword=你的密碼
 ```
+
+`storeFile` 必須是**完整路徑**，不能寫 `~/app_keys/...`，因為 Gradle 不會把 `~` 展開成你的家目錄。可以用 `echo ~/app_keys/nettools-release.jks` 查出完整路徑。
 
 （用 keytool 預設的 PKCS12 格式時，`storePassword` 和 `keyPassword` 是同一個密碼。）
 

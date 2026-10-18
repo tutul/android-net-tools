@@ -127,7 +127,7 @@ RELEASE.md                    Signing and installing a release build
 
 | Component | Use | License |
 |---|---|---|
-| [iperf3](https://github.com/esnet/iperf) 3.22 (ESnet) | iperf3 tab | BSD 3-Clause |
+| [iperf3](https://github.com/esnet/iperf) 3.22 (ESnet), including cJSON | iperf3 tab; binaries committed in `jniLibs` | BSD 3-Clause (cJSON: MIT), see [third_party/iperf3/LICENSE](third_party/iperf3/LICENSE) |
 | [JSch](https://github.com/mwiede/jsch) 2.28.8 (mwiede fork) | SSH | BSD-style |
 | [Bouncy Castle](https://www.bouncycastle.org/) 1.86 | ed25519 / curve25519 for JSch on Android | MIT-style |
 | AndroidX / Jetpack Compose | UI | Apache 2.0 |
@@ -136,3 +136,8 @@ Public IP lookups use [Cloudflare's trace page](https://1.1.1.1/cdn-cgi/trace)
 and [ipify](https://www.ipify.org/). The public iperf3 server list comes
 from [iperf.fr](https://iperf.fr/iperf-servers.php); these are shared servers
 run by others and are often busy.
+
+## License
+
+NetTools is released under the [MIT License](LICENSE). Third-party
+components keep their own licenses, listed above.

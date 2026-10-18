@@ -23,6 +23,10 @@ mkdir -p "$DL"
 [ -f "$TARBALL" ] || curl -fsSL "$URL" -o "$TARBALL"
 echo "$SHA256  $TARBALL" | shasum -a 256 -c -
 
+# Ship iperf3's license (BSD, plus the bundled cJSON's MIT notice) with its binaries.
+mkdir -p "$ROOT/third_party/iperf3"
+tar -xzOf "$TARBALL" "iperf-$VERSION/LICENSE" > "$ROOT/third_party/iperf3/LICENSE"
+
 for abi in "${ABIS[@]}"; do
     case "$abi" in
         arm64-v8a) triple=aarch64-linux-android ;;

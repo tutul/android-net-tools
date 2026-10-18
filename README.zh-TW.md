@@ -104,9 +104,13 @@ RELEASE.md                    release 版的簽章與安裝步驟
 
 | 元件 | 用途 | 授權 |
 |---|---|---|
-| [iperf3](https://github.com/esnet/iperf) 3.22（ESnet） | iperf3 分頁 | BSD 3-Clause |
+| [iperf3](https://github.com/esnet/iperf) 3.22（ESnet），內含 cJSON | iperf3 分頁；編譯好的執行檔放在 `jniLibs` | BSD 3-Clause（cJSON：MIT），見 [third_party/iperf3/LICENSE](third_party/iperf3/LICENSE) |
 | [JSch](https://github.com/mwiede/jsch) 2.28.8（mwiede 維護版） | SSH | BSD 類 |
 | [Bouncy Castle](https://www.bouncycastle.org/) 1.86 | 讓 JSch 在 Android 上支援 ed25519 / curve25519 | MIT 類 |
 | AndroidX / Jetpack Compose | 介面 | Apache 2.0 |
 
 公網 IP 查詢使用 [Cloudflare 的 trace 頁面](https://1.1.1.1/cdn-cgi/trace)和 [ipify](https://www.ipify.org/)。公開 iperf3 伺服器清單來自 [iperf.fr](https://iperf.fr/iperf-servers.php)，這些都是別人架設、大家共用的伺服器，經常忙線。
+
+## 授權
+
+NetTools 採用 [MIT 授權](LICENSE)。第三方元件各自沿用原本的授權，詳見上表。
