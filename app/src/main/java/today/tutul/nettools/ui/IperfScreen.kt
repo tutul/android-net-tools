@@ -107,7 +107,9 @@ class IperfViewModel(app: Application) : AndroidViewModel(app) {
             udp = udp,
             seconds = seconds.toIntOrNull()?.coerceIn(1, 300) ?: 10,
             maxBytes = maxMb.toLongOrNull()?.takeIf { it > 0 }?.times(1_000_000),
-            parallel = parallel.toIntOrNull()?.coerceIn(1, 16) ?: 1,
+            // The Streams field is hidden in UDP mode, and iperf3's -b is per stream, so
+            // a leftover TCP stream count would silently multiply the UDP rate.
+            parallel = if (udp) 1 else parallel.toIntOrNull()?.coerceIn(1, 16) ?: 1,
             udpMbps = udpMbps.toIntOrNull()?.coerceIn(1, 10_000) ?: 10,
         )
         intervals.clear()
