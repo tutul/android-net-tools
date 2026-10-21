@@ -1,12 +1,9 @@
 *.iml
 .gradle
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+# Android Studio regenerates its project settings on open; they're per-machine
+# (e.g. the selected device) and churn between Studio versions.
+/.idea/
 .DS_Store
 /build
 /captures
